@@ -1,15 +1,10 @@
+from sklearn.ensemble import BaggingClassifier
 from transformers import AutoTokenizer, AutoModel, TFAutoModel
 import numpy as np
 from scipy.spatial.distance import cosine
-
 from sklearn.neighbors import KNeighborsClassifier
-
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
-
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, classification_report, accuracy_score, confusion_matrix
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.metrics.pairwise import cosine_distances
-
 from sklearn.model_selection import StratifiedKFold
 import time
 from sklearn.decomposition import PCA
@@ -23,7 +18,7 @@ from transformers import AutoTokenizer
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, classification_report, \
     confusion_matrix, average_precision_score, multilabel_confusion_matrix
 
-path = "training-Obama-Romney-tweets.xlsx"
+
 stopwords = ["able", "about", "across", "after", "all", "almost", "also", "am", "among",
              "an", "and", "any", "are", "as", "at", "be", "because", "been", "but", "by",
              "can", "cannot", "could", "dear", "did", "do", "does", "either", "else",
@@ -162,9 +157,15 @@ CONTRACTION_MAP = {
     "you're": "you are",
     "you've": "you have"
 }
-def expand_contractions(text, contraction_mapping=CONTRACTION_MAP):
-    # using a given text and a contraction map, this function handls contractions by expanding them to the complete form
+path = "/Users/sana/Desktop/Data Mining /60_SanaEbrahimi/training-Obama-Romney-tweets.xlsx"
+f = open('Eval_Repo.txt', 'a+')
+filename = 'first_classifier.joblib.pkl'
 
+def expand_contractions(text, contraction_mapping=CONTRACTION_MAP):
+    '''using a given text and a contraction map, this function handls contractions by expanding them to the complete form
+        :param text(string), contraction_mapping(dict)
+        :return expanded text(string)
+'''
     global CONTRACTION_MAP
     contractions_pattern = re.compile('({})'.format('|'.join(contraction_mapping.keys())),
                                       flags=re.IGNORECASE | re.DOTALL)
@@ -184,18 +185,23 @@ def expand_contractions(text, contraction_mapping=CONTRACTION_MAP):
 
 
 def cleaning_text(text):
+    '''This function cleans the text data from special characters, punctuation, numbers and stop words
+    :param text(string)
+    :return text(string)
+    '''
     text = str(text).lower()
-    text = re.sub('\[.*?\]', '', text)
+    text = re.sub('\[.*?@\]', '', text)
     text = re.sub('https?://\S+|www\.\S+', '', text)
     text = re.sub('<.*?>+', '', text)
     text = re.sub('[%s]' % re.escape(string.punctuation), '', text)
     text = re.sub('\n', '', text)
     text = re.sub('\w*\d\w*', '', text)
+    text = " ".join([word for word in text.split() if word not in stopwords])
     text = " ".join([s for s in re.split("([A-Z][a-z]+[^A-Z]*)", text) if s])
-    text = expand_contractions(text)
     return text
 
 def calculate_metric(labels, preds, y_pred, y_true):
+    '''Calculates evaluation metrics '''
     print("accuracy: {:.3f}".format((labels == preds).mean()))
     print("precision without probability: {:.3f}".format(precision_score(labels, preds, average='macro')))
     print("precision with probability: {:.3f}".format(average_precision_score(y_true, y_pred, average='macro')))
@@ -204,67 +210,30 @@ def calculate_metric(labels, preds, y_pred, y_true):
     print("f1 without probability: {:.3f}".format(f1_score(labels, preds, average='macro')))
     # print("f1 with probability: {:.3f}".format(f1_score(y_true, y_pred, average='macro')))
     print("ROC score: {:.3f}".format(roc_auc_score(y_true, y_pred, multi_class='ovr', average='macro')))
-# #def cleaning_dataframe(path):
-#     cols = [1, 2, 3, 4]
-#     df= pd.read_excel(path)
-#     df = df.rename({'Unnamed: 4': 'Class'}, axis=1)
-# 
-#     print(len(df))
-# 
-#     df = df.drop(index = df.loc[df['Class'] == 'irrelevant'].index)
-#     df = df.drop(index = df.loc[df['Class'] == 'irrevelant'].index)
-#     df1 = df.drop(index = df.loc[df['Class'] == 2].index)
-#     df1 = df1.drop(index = df1.loc[df1['Class'] == '2'].index)
-#     df2 = df1.dropna()
-#     df4 = df.dropna()
-#     print('Positive', round(df['Class'].value_counts()[1] / len(df) * 100, 2),
-#           '% of the dataset')
-#     print('Negative', round(df['Class'].value_counts()[-1] / len(df) * 100, 2),
-#           '% of the dataset')
-#     print('Neutral', round(df['Class'].value_counts()[0] / len(df) * 100, 2),
-#           '% of the dataset')
-#     df3 = df2.drop(columns=['date', 'time'])
-#     df4 = df3.dropna()
-# 
-#     # print(df4.columns)
-#     df = df.drop(columns=[0])
-#     df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:cleaning_text(x))
-#     df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:expand_contractions(x))
-#     X_train, X_test= train_test_split(df4, test_size=0.2)
-#     # print(X_test.loc[X_test['Class'] == 2])
-# 
-#     # df3['Class'] = df4['Class'].astype(int)
-#     # return df3
-# def cleaning_dataframe(path):
-cols = [1, 2, 3, 4]
-df= pd.read_excel(path, usecols = cols)
-df = df.rename({'Unnamed: 4': 'Class'}, axis=1)
-print(df.columns)
-df = df.drop(index = df.loc[df['Class'] == 'irrelevant'].index)
-df = df.drop(index = df.loc[df['Class'] == 'irrevelant'].index)
-df1 = df.drop(index = df.loc[df['Class'] == 2].index)
-df1 = df1.drop(index = df1.loc[df1['Class'] == '2'].index)
-df2 = df1.dropna()
-df4 = df.dropna()
-    # print('Positive', round(df['Class'].value_counts()[1] / len(df) * 100, 2),
-    #       '% of the dataset')
-    # print('Negative', round(df['Class'].value_counts()[-1] / len(df) * 100, 2),
-    #       '% of the dataset')
-    # print('Neutral', round(df['Class'].value_counts()[0] / len(df) * 100, 2),
-    #       '% of the dataset')
-df3 = df2.drop(columns=['date', 'time'])
-df4 = df3.dropna()
 
-print(df4.columns)
-# df = df.drop(columns=[0])
-df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:cleaning_text(x))
-df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:expand_contractions(x))
-X_train, X_test= train_test_split(df4, test_size=0.2)
-# print(X_test.loc[X_test['Class'] == 2])
-#
-df4['Class'] = df4['Class'].astype(int)
-    # return df
+def cleaning_dataframe(path):
+    '''read data from excel sheet, create and clean a data frame containing tweets and their labels
+    :param a path to .xlsx file
+    :return dataframe
+    '''
+    cols = [1, 2, 3, 4]
+    df= pd.read_excel(path, usecols=cols)
+    df = df.rename({'Unnamed: 4': 'Class'}, axis=1)
+    df = df.drop(index = df.loc[df['Class'] == 'irrelevant'].index)
+    df = df.drop(index = df.loc[df['Class'] == 'irrevelant'].index)
+    df1 = df.drop(index = df.loc[df['Class'] == 2].index)
+    df1 = df1.drop(index = df1.loc[df1['Class'] == '2'].index)
+    df2 = df1.dropna()
+    df3 = df2.drop(columns=['date', 'time'])
+    df4 = df3.dropna()
+    df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:cleaning_text(x))
+    df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:expand_contractions(x))
+    df4['Class'] = df4['Class'].astype(int)
+    return df4
+
+df4 = cleaning_dataframe(path)
 skf = StratifiedKFold(n_splits=2, random_state=None, shuffle=False)
+
 for train_index, test_index in skf.split(df4, df4['Class']):
     original_Xtrain, original_Xtest = df4.iloc[train_index], df4.iloc[test_index]
     original_ytrain, original_ytest = df4['Class'].iloc[train_index], df4['Class'].iloc[test_index]
@@ -285,52 +254,49 @@ original_ytest = original_ytest.astype(int)
 
 
 
-
 def get_embedding(text, model):
+    '''This function creates a vector that represents each tweet by a vector
+    :param A list containing a single tweet: text(list), pretrained roberta model
+    :return feature vector: numpy array
+    '''
     encoded_input = tokenizer(text[0], return_tensors='pt')
     features = model(**encoded_input)
-    # pca = PCA(n_components=100)
     features = features[0].detach().cpu().numpy()
     features_mean = np.mean(features[0], axis=0)
-    # EV = pca.fit_transform(features_mean)
     return features_mean
 
-skf2 = StratifiedKFold(n_splits=2, random_state=None, shuffle=False)
-f = open('Evaluation_Report2.txt', 'a+')
-filename = 'first_classifier.joblib.pkl'
-def Classifier(classifier, model,name,  X_train, y_train, X_test, y_test):
+
+def Classifier(classifier, model, X_train, y_train, X_test, y_test):
+    '''This function trains and finds the best classifier and saves the model into a .pkl file
+     :param classifier, model(roberta), dataframe of train tweets, dataframe of train labels,
+     dataframe of test tweets, dataframe of test labels
+     :return predicted labels
+     '''
 
     accuracy= []
     precision= []
     recall = []
     f1 = []
-    auc = []
     t0 = time.time()
     pca = PCA(n_components=60)
-    for train, test in skf2.split(X_train, y_train):
+    for train, test in skf.split(X_train, y_train):
 
         embedded_vector = []
         test_vector = []
         for tweet in X_train[train]:
             features_mean = get_embedding(tweet, model)
-            print(features_mean)
             embedded_vector.append(features_mean)
-
         EV1 = pca.fit_transform(embedded_vector)
-        print("Total variance explained:", np.around(np.cumsum(pca.explained_variance_ratio_), decimals=3))
-        print(len(embedded_vector))
+        # print("Total variance explained:", np.around(np.cumsum(pca.explained_variance_ratio_), decimals=3))
         m = classifier.fit(EV1, y_train[train])
         # picking the best estimator
         best = classifier.best_estimator_
         for tweet_test in X_train[test]:
             encoded_test = get_embedding(tweet_test, model)
             test_vector.append(encoded_test)
-        # encoded_test = tokenizer(X_train[test], return_tensors='pt')
-        # pca = PCA(n_components=40)
         EV2 = pca.fit_transform(test_vector)
         prediction = best.predict(EV2)
-        # y = np.array(y_train[test]).flatten()
-        # p = np.array(EV2).flatten()
+
         accuracy.append(accuracy_score(prediction, y_train[test]))
         precision.append(precision_score(y_train[test], prediction, average='macro'))
         recall.append(recall_score(y_train[test], prediction, average='macro'))
@@ -339,72 +305,71 @@ def Classifier(classifier, model,name,  X_train, y_train, X_test, y_test):
 
     # final evaluation is the average of running the model on all the folds
 
-    f.write("{} {} {}\n".format('---' * 10, name, '---' * 10))
+    f.write('---' * 10+ 'K Neighbors Classifier' +'---' * 10)
     f.write("The entire process of training and testing took {:.3f} s\n".format(t1-t0))
-    f.write("accuracy: {:.3f}\n".format(np.mean(accuracy)))
-    f.write("precision: {:.3f}\n".format(np.mean(precision)))
-    f.write("recall: {:.3f}\n".format(np.mean(recall)))
-    f.write("f1: {:.3f}\n".format(np.mean(f1)))
-    # f.write("ROC score: {:.3f}\n".format(np.mean(auc)))
+    # f.write("accuracy: {:.3f}\n".format(np.mean(accuracy)))
+    # f.write("precision: {:.3f}\n".format(np.mean(precision)))
+    # f.write("recall: {:.3f}\n".format(np.mean(recall)))
+    # f.write("f1: {:.3f}\n".format(np.mean(f1)))
     f.write("Best hyper parameters to use: {}\n".format(classifier.best_params_))
 
 
-    tmp = []
+    embedded_test = []
     for test in X_test:
         encoded_test = get_embedding(test, model)
-        tmp.append(encoded_test)
-    test_data = pca.fit_transform(tmp)
-    smote_prediction = best.predict(test_data)
+        embedded_test.append(encoded_test)
+    test_data = pca.fit_transform(embedded_test)
+    prediction = best.predict(test_data)
 
 
-    if np.mean(accuracy) > 0.58:
-            # save the classifier
-        _ = joblib.dump(best, filename, compress=9)
-
-    # f.write(classification_report(y_test, smote_prediction, ))
-    return smote_prediction
+    # save the classifier
+    _ = joblib.dump(best, filename, compress=9)
+    return prediction
 
 
 MODEL = f"cardiffnlp/twitter-roberta-base-sentiment"
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
 model = AutoModel.from_pretrained(MODEL)
-best_model = joblib.load(filename)
-knears_param = {'n_neighbors': [150, 250, 300, 350],'algorithm' : ['auto'], 'metric': ['minkowski', 'cosine']}
-knn = GridSearchCV(KNeighborsClassifier(), knears_param)
-prediction_knn = Classifier(knn, model,  "K Neighbors Classifier", original_Xtrain , original_ytrain , original_Xtest, original_ytest)
-#For testing porpuses
-# X_test = cleaning_dataframe("training-Obama-Romney-tweets.xlsx")
-# # X_test = cleaning_dataframe("final-testData-no-label-Romney-tweets.xlsx")
-# 
+#to load the trained model from pickle file
+# best_model = joblib.load(filename)
+knears_param = {'base_estimator__n_neighbors': [20, 50, 150],'base_estimator__algorithm' : ['auto'], 'base_estimator__metric': ['cosine'], 'n_estimators':[10,20,50]}
+knn = GridSearchCV(BaggingClassifier(KNeighborsClassifier()), knears_param)
+prediction_knn = Classifier(knn, model,  original_Xtrain , original_ytrain , original_Xtest, original_ytest)
+f.write(classification_report(original_ytest, prediction_knn, digits=3))
+confusion_matrix = confusion_matrix(original_ytest, prediction_knn)
+f.write("Confiusion matrix: -1 true  0        1 \n")
+f.write("     -1 predicted   {}      {}       {}\n".format(confusion_matrix[0][0],confusion_matrix[0][1],confusion_matrix[0][2]))
+f.write("      0             {}      {}       {}\n".format(confusion_matrix[1][0],confusion_matrix[1][1], confusion_matrix[1][2]))
+f.write("      1             {}      {}       {}\n".format(confusion_matrix[2][0],confusion_matrix[2][1], confusion_matrix[2][2]))
+right_classified = confusion_matrix[0][0]+confusion_matrix[1][1]+confusion_matrix[2][2]
+wrong_classified = confusion_matrix[0][1]+confusion_matrix[0][2]+confusion_matrix[1][0]+confusion_matrix[1][2]+confusion_matrix[2][0]+confusion_matrix[2][1]
+f.write("      right     |      wrong   \n")
+f.write("       {}       |      {}      \n".format(right_classified, wrong_classified))
+f.write("  Classification accuracy :  {}\n".format(right_classified/(right_classified+wrong_classified)))
+f.close()
+
+
+
+# X_test = cleaning_dataframe("final-testData-no-label-Obama-tweets.xlsx")
+# X_test = cleaning_dataframe("final-testData-no-label-Romney-tweets.xlsx")
 # X_test = X_test.values
 # print(X_test)
 # X_test = np.array(X_test)
 # pca = PCA(n_components=50)
 # final = []
-# for tweet in original_Xtest:
+# for tweet in X_test:
 #     # print(tweet)
 #     encoded_test = get_embedding(tweet[0], model)
 #     final.append(encoded_test)
 # test_data = pca.fit_transform(final)
 # smote_prediction = best_model.predict(test_data)
-# print(best_model.score(test_data))
-f.write(classification_report(original_ytest, prediction_knn, digits=3))
-_ = confusion_matrix(original_ytest, prediction_knn)
-f.close()
+# # print(best_model.score(test_data))
+# # f.write(classification_report(original_ytest, prediction_knn, digits=3))
+# # _ = confusion_matrix(original_ytest, prediction_knn)
 # output = open('Obama.txt', 'w')
 # # output = open('Obama.txt', 'w')
-# id = range(1, 1952)
-# i = 0
-# for p in smote_prediction:
-#     output.write(str(id[i])+ ";"+";"+  str(p)+'\n')
-#     i += 1
-# output.write(smote_prediction)
-# output.write(prediction_knn)
-# output.close()
-# f.write("{}".format('------' * 20))
-# f.close()
-# print("Confiusion matrix:  {}      {}".format(oversample_smote[0][0],oversample_smote[0][1]))
-# print("                    {}      {}".format(oversample_smote[1][0],oversample_smote[1][1]))
+
+
 
 
 
