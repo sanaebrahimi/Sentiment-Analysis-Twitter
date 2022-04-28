@@ -186,7 +186,7 @@ def cleaning_text(text):
     text = re.sub('\n', '', text)
     text = re.sub('\w*\d\w*', '', text)
     text = " ".join([s for s in re.split("([A-Z][a-z]+[^A-Z]*)", text) if s])
-    text = " ".join([word for word in text.split() if word not in stopword])
+    text = " ".join([word for word in text.split() if word not in stopwords])
     return text
 
 f = open('Evaluation_Report.txt','a+')
