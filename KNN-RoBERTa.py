@@ -332,7 +332,8 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL)
 model = AutoModel.from_pretrained(MODEL)
 #to load the trained model from pickle file
 # best_model = joblib.load(filename)
-knears_param = {'base_estimator__n_neighbors': [20, 50, 150],'base_estimator__algorithm' : ['auto'], 'base_estimator__metric': ['cosine'], 'n_estimators':[10,20,50]}
+knears_param = {'base_estimator__n_neighbors': [20, 50, 150],'base_estimator__algorithm' : ['auto'], 
+                'base_estimator__metric': ['cosine','minkowski'], 'n_estimators':[10,20,25, 30,50]}
 knn = GridSearchCV(BaggingClassifier(KNeighborsClassifier()), knears_param)
 prediction_knn = Classifier(knn, model,  original_Xtrain , original_ytrain , original_Xtest, original_ytest)
 f.write(classification_report(original_ytest, prediction_knn, digits=3))
@@ -346,6 +347,7 @@ wrong_classified = confusion_matrix[0][1]+confusion_matrix[0][2]+confusion_matri
 f.write("      right     |      wrong   \n")
 f.write("       {}       |      {}      \n".format(right_classified, wrong_classified))
 f.write("  Classification accuracy :  {}\n".format(right_classified/(right_classified+wrong_classified)))
+f.write("ROC score- One over Rest: {:.3f}\n".format(roc_auc_score(original_ytest, prediction_knn, multi_class='ovr', average='macro')))
 f.close()
 
 
