@@ -1,14 +1,20 @@
 from transformers import AutoModelForSequenceClassification
+from sklearn.ensemble import BaggingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+
 from scipy.special import softmax
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import re
+from sklearn.decomposition import PCA
+
 import string
 import numpy as np
 from transformers import AutoTokenizer
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, classification_report, \
     confusion_matrix, average_precision_score, multilabel_confusion_matrix
 import joblib
+
 from sklearn.datasets import load_digits
 
 path = "training-Obama-Romney-tweets.xlsx"
@@ -180,7 +186,9 @@ def cleaning_text(text):
     text = re.sub('\n', '', text)
     text = re.sub('\w*\d\w*', '', text)
     text = " ".join([s for s in re.split("([A-Z][a-z]+[^A-Z]*)", text) if s])
+    text = " ".join([word for word in text.split() if word not in stopword])
     return text
+
 f = open('Evaluation_Report.txt','a+')
 filename = 'second_classifier.joblib.pkl'
 
@@ -190,7 +198,6 @@ def calculate_metric(labels, preds, y_pred, y_true, model):
     f.write("Average precision probability: {:.3f}\n".format(precision_score(labels, preds, average='macro')))
     f.write("precision: {:.3f}\n".format(average_precision_score(y_true, y_pred, average='macro')))
     f.write("recall: {:.3f}\n".format(recall_score(labels, preds, average='macro')))
-    # print("recall with probability: {:.3f}".format(recall_score(y_true, y_pred, average='macro')))
     f.write("f1: {:.3f}\n".format(f1_score(labels, preds, average='macro')))
     # print("f1 with probability: {:.3f}".format(f1_score(y_true, y_pred, average='macro')))
     f.write("ROC score- One over Rest: {:.3f}\n".format(roc_auc_score(y_true, y_pred, multi_class='ovr', average='macro')))
@@ -199,78 +206,88 @@ def calculate_metric(labels, preds, y_pred, y_true, model):
         _ = joblib.dump(model, filename, compress=9)
 
 
-cols = [1, 2, 3, 4]
-df= pd.read_excel(path, usecols=cols)
-df = df.rename({'Unnamed: 4': 'Class'}, axis=1)
+def cleaning_dataframe(path):
+    cols = [1, 2, 3, 4]
+    df= pd.read_excel(path, usecols = cols)
+    df = df.rename({'Unnamed: 4': 'Class'}, axis=1)
+    df = df.drop(index = df.loc[df['Class'] == 'irrelevant'].index)
+    df = df.drop(index = df.loc[df['Class'] == 'irrevelant'].index)
+    df1 = df.drop(index = df.loc[df['Class'] == 2].index)
+    df1 = df1.drop(index = df1.loc[df1['Class'] == '2'].index)
+    df2 = df1.dropna()
+    df3 = df2.drop(columns=['date', 'time'])
+    df4 = df3.dropna()
 
-print(len(df))
+    df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:cleaning_text(x))
+    df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:expand_contractions(x))
+    df4['Class'] = df4['Class'].astype(int)
+    
+    return df4
 
-df = df.drop(index = df.loc[df['Class'] == 'irrelevant'].index)
-df = df.drop(index = df.loc[df['Class'] == 'irrevelant'].index)
-df1 = df.drop(index = df.loc[df['Class'] == 2].index)
-df1 = df1.drop(index = df1.loc[df1['Class'] == '2'].index)
-# print(df1.loc[df1['Class'] == 2])
-df2 = df1.dropna()
-print('Positive', round(df['Class'].value_counts()[1] / len(df) * 100, 2),
-      '% of the dataset')
-print('Negative', round(df['Class'].value_counts()[-1] / len(df) * 100, 2),
-      '% of the dataset')
-print('Neutral', round(df['Class'].value_counts()[0] / len(df) * 100, 2),
-      '% of the dataset')
-df3 = df2.drop(columns=['date', 'time'])
-df4 = df3.dropna()
-df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:cleaning_text(x))
-df4['Anootated tweet'] = df4['Anootated tweet'].apply(lambda x:expand_contractions(x))
-X_train, X_test= train_test_split(df4, test_size=0.2)
-# print(X_test.loc[X_test['Class'] == 2])
 
-y = X_test['Class']
+
+def prediction(model, tokenizer, X, y):
+    prediction = []
+    prediction_prob = []
+    labels = {0: -1,
+            1: 0,
+            2: 1}
+  
+    for tweet in X['Anootated tweet']:
+        encoded_input = tokenizer(tweet, return_tensors='pt')
+        output = model(**encoded_input)
+        scores = output[0][0].detach().numpy()
+        scores = softmax(scores)
+        sentiment = np.argmax(scores)
+        label = labels[sentiment]
+        prediction.append(label)
+        scores = np.zeros((1,3))
+        scores[0,sentiment] = 1
+        prediction_prob.append(scores)
+        
+    
+
+
+    y_true = np.array(y)
+    n = len(y)
+    y_pred = np.array(prediction)
+    class_0 = np.zeros(n)
+    class_0[np.where(y_true == 0)] = 1
+    class_1 = np.zeros(n)
+    class_1[np.where(y_true == 1)] = 1
+    class_min1 = np.zeros(n)
+    class_min1[np.where(y_true == -1)] = 1
+    y_true2 = np.column_stack((class_min1, class_0, class_1))
+    y_pred2 = np.array(prediction_prob).reshape((n, 3))
+
+
+    calculate_metric(y_true, y_pred, y_pred2, y_true2, model)
+    f.write(classification_report(y, results, digits=3))
+    f.write(classification_report(original_ytest, prediction_knn, digits=3))
+    confusion_matrix = confusion_matrix(y, results)
+    f.write("Confiusion matrix:  0 true  1        2\n")
+    f.write("      0 predicted   {}      {}       {}\n".format(confusion_matrix[0][0],confusion_matrix[0][1],confusion_matrix[0][2]))
+    f.write("      1             {}      {}       {}\n".format(confusion_matrix[1][0],confusion_matrix[1][1], confusion_matrix[1][2]))
+    f.write("      2             {}      {}       {}\n".format(confusion_matrix[2][0],confusion_matrix[2][1], confusion_matrix[2][2]))
+    right = confusion_matrix[0][0]+confusion_matrix[1][1]+confusion_matrix[2][2]
+    wrong = confusion_matrix[0][1]+confusion_matrix[0][2]+confusion_matrix[1][0]+confusion_matrix[1][2]+confusion_matrix[2][0]+confusion_matrix[2][1]
+    f.write("      right     |      wrong  \n")
+    f.write("       {}       |      {}      \n".format(right, wrong))
+    f.write("  Classification accuracy :  {}\n".format(right/(right+wrong)))
+    f.write(str("---------------------"*20))
+    f.close()
+    
+    
+df2 = cleaning_dataframe(path)
+X = df2.drop('Class', axis=1)
+y = df2['Class']
 y = y.astype(int)
 y = y.tolist()
 y = list(filter((2).__ne__, y))
 
-
-X = X_test.drop('Class', axis=1)
 MODEL = f"cardiffnlp/twitter-roberta-base-sentiment"
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
 #model = joblib.load(filename)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL)
-labels = []
-results = []
-results_prob = []
+prediction(model,tokenizer,X, y)
 
-dict = {0:-1,
-        1: 0,
-        2: 1,
-              }
-for tweet in X['Anootated tweet']:
-    encoded_input = tokenizer(tweet, return_tensors='pt')
-    output = model(**encoded_input)
-    scores = output[0][0].detach().numpy()
-    scores = softmax(scores)
-    sentiment = np.argmax(scores)
-    results.append(dict[sentiment])
-    results_prob.append(scores)
-    # f.write(str(dict[sentiment]) + '\n')
-    # output = open('Obama.txt', 'w')
-    # output.write(str(dict[sentiment]) + '\n')
-
-# output.close()
-
-y_true = np.array(y)
-y_pred = np.array(results)
-class_0 = np.zeros((len(y)))
-class_0[np.where(y_true == 0)] = 1
-class_1 = np.zeros((len(y)))
-class_1[np.where(y_true == 1)] = 1
-class_min1 = np.zeros((len(y)))
-class_min1[np.where(y_true == -1)] = 1
-y_true2 = np.column_stack((class_min1, class_0, class_1))
-y_pred2 = np.array(results_prob).reshape((len(y), 3))
-calculate_metric(y_true, y_pred, y_pred2, y_true2, model)
-f.write(classification_report(y, results, digits=3))
-f.write(str("---------------------"*20))
-f.close()
-# output = open('Obama.txt', 'w')
-
-# output.write(y_pred)
