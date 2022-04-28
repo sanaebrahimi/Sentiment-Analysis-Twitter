@@ -262,7 +262,7 @@ def prediction(model, tokenizer, X, y):
 
 
     calculate_metric(y_true, y_pred, y_pred2, y_true2, model)
-    f.write(classification_report(y, results, digits=3))
+    f.write(classification_report(y, prediction, digits=3))
     f.write(classification_report(original_ytest, prediction_knn, digits=3))
     confusion_matrix = confusion_matrix(y, results)
     f.write("Confiusion matrix:  0 true  1        2\n")
