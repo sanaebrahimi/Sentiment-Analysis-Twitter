@@ -157,7 +157,7 @@ CONTRACTION_MAP = {
     "you're": "you are",
     "you've": "you have"
 }
-path = "/Users/sana/Desktop/Data Mining /60_SanaEbrahimi/training-Obama-Romney-tweets.xlsx"
+path = "training-Obama-Romney-tweets.xlsx"
 f = open('Eval_Repo.txt', 'a+')
 filename = 'first_classifier.joblib.pkl'
 
@@ -231,25 +231,9 @@ def cleaning_dataframe(path):
     df4['Class'] = df4['Class'].astype(int)
     return df4
 
-df4 = cleaning_dataframe(path)
+
 skf = StratifiedKFold(n_splits=2, random_state=None, shuffle=False)
 
-for train_index, test_index in skf.split(df4, df4['Class']):
-    original_Xtrain, original_Xtest = df4.iloc[train_index], df4.iloc[test_index]
-    original_ytrain, original_ytest = df4['Class'].iloc[train_index], df4['Class'].iloc[test_index]
-
-
-
-original_Xtrain = original_Xtrain.drop('Class', axis=1)
-original_Xtest = original_Xtest.drop('Class', axis=1)
-
-original_Xtrain = original_Xtrain.values
-original_Xtest = original_Xtest.values
-original_ytrain = original_ytrain.values
-original_ytest = original_ytest.values
-
-original_ytrain = original_ytrain.astype(int)
-original_ytest = original_ytest.astype(int)
 
 
 
@@ -327,28 +311,59 @@ def Classifier(classifier, model, X_train, y_train, X_test, y_test):
     return prediction
 
 
-MODEL = f"cardiffnlp/twitter-roberta-base-sentiment"
-tokenizer = AutoTokenizer.from_pretrained(MODEL)
-model = AutoModel.from_pretrained(MODEL)
-#to load the trained model from pickle file
-# best_model = joblib.load(filename)
-knears_param = {'base_estimator__n_neighbors': [20, 50, 150],'base_estimator__algorithm' : ['auto'], 
-                'base_estimator__metric': ['cosine','minkowski'], 'n_estimators':[10,20,25, 30,50]}
-knn = GridSearchCV(BaggingClassifier(KNeighborsClassifier()), knears_param)
-prediction_knn = Classifier(knn, model,  original_Xtrain , original_ytrain , original_Xtest, original_ytest)
-f.write(classification_report(original_ytest, prediction_knn, digits=3))
-confusion_matrix = confusion_matrix(original_ytest, prediction_knn)
-f.write("Confiusion matrix: -1 true  0        1 \n")
-f.write("     -1 predicted   {}      {}       {}\n".format(confusion_matrix[0][0],confusion_matrix[0][1],confusion_matrix[0][2]))
-f.write("      0             {}      {}       {}\n".format(confusion_matrix[1][0],confusion_matrix[1][1], confusion_matrix[1][2]))
-f.write("      1             {}      {}       {}\n".format(confusion_matrix[2][0],confusion_matrix[2][1], confusion_matrix[2][2]))
-right_classified = confusion_matrix[0][0]+confusion_matrix[1][1]+confusion_matrix[2][2]
-wrong_classified = confusion_matrix[0][1]+confusion_matrix[0][2]+confusion_matrix[1][0]+confusion_matrix[1][2]+confusion_matrix[2][0]+confusion_matrix[2][1]
-f.write("      right     |      wrong   \n")
-f.write("       {}       |      {}      \n".format(right_classified, wrong_classified))
-f.write("  Classification accuracy :  {}\n".format(right_classified/(right_classified+wrong_classified)))
-f.write("ROC score- One over Rest: {:.3f}\n".format(roc_auc_score(original_ytest, prediction_knn, multi_class='ovr', average='macro')))
-f.close()
+def display(confusion, prediction_knn, original_ytest):
+    n = len(original_ytest)
+    y_pred = np.array(prediction_knn).reshape((n, 3))
+    original_ytest = np.array(original_ytest)
+    y_true = np.zeros((n, 3))
+    y_true[np.where(original_ytest == 0), 0] = 1
+    y_true[np.where(original_ytest == 1), 1] = 1
+    y_true[np.where(original_ytest == -1), 2] = 1
+    f.write("Confiusion matrix: -1 true  0        1 \n")
+    f.write("     -1 predicted   {}      {}       {}\n".format(confusion[0][0], confusion[0][1], confusion[0][2]))
+    f.write("      0             {}      {}       {}\n".format(confusion[1][0], confusion[1][1], confusion[1][2]))
+    f.write("      1             {}      {}       {}\n".format(confusion[2][0], confusion[2][1],
+                                                               confusion[2][2]))
+    right_classified = confusion[0][0] + confusion[1][1] + confusion[2][2]
+    wrong_classified = confusion[0][1] + confusion[0][2] + confusion[1][0] + confusion[1][2] + confusion[2][0] + \
+                       confusion[2][1]
+
+    f.write("      right     |      wrong   \n")
+    f.write("       {}       |      {}      \n".format(right_classified, wrong_classified))
+    f.write("  Classification accuracy :  {}\n".format(right_classified / (right_classified + wrong_classified)))
+    f.write("ROC score- One over Rest: {:.3f}\n".format(
+       roc_auc_score( y_true, y_pred, multi_class='ovr', average='macro')))
+    f.close()
+if __name__ == '__main__':
+    df4 = cleaning_dataframe(path)
+    for train_index, test_index in skf.split(df4, df4['Class']):
+        original_Xtrain, original_Xtest = df4.iloc[train_index], df4.iloc[test_index]
+        original_ytrain, original_ytest = df4['Class'].iloc[train_index], df4['Class'].iloc[test_index]
+
+    original_Xtrain = original_Xtrain.drop('Class', axis=1)
+    original_Xtest = original_Xtest.drop('Class', axis=1)
+
+    original_Xtrain = original_Xtrain.values
+    original_Xtest = original_Xtest.values
+    original_ytrain = original_ytrain.values
+    original_ytest = original_ytest.values
+
+    original_ytrain = original_ytrain.astype(int)
+    original_ytest = original_ytest.astype(int)
+
+    MODEL = f"cardiffnlp/twitter-roberta-base-sentiment"
+    tokenizer = AutoTokenizer.from_pretrained(MODEL)
+    model = AutoModel.from_pretrained(MODEL)
+    #to load the trained model from pickle file
+    # best_model = joblib.load(filename)
+    knears_param = {'base_estimator__n_neighbors': [20, 50, 150],'base_estimator__algorithm' : ['auto'], 'base_estimator__metric': ['cosine'], 'n_estimators':[10,20,50]}
+    knn = GridSearchCV(BaggingClassifier(KNeighborsClassifier()), knears_param)
+    prediction_knn = Classifier(knn, model,  original_Xtrain , original_ytrain , original_Xtest, original_ytest)
+    f.write(classification_report(original_ytest, prediction_knn, digits=3))
+    confusion_mat = confusion_matrix(original_ytest, prediction_knn)
+    display(confusion_mat, prediction_knn, original_ytest)
+
+
 
 
 
